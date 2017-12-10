@@ -15,6 +15,11 @@
 #define SPRN_TFIAR      0x81    /* Transaction Failure Inst Addr    */
 #define SPRN_TFHAR      0x80    /* Transaction Failure Handler Addr */
 
+#define PPC_INST_TBEGIN 0x7c00051d
+#define __PPC_TB_ROT(rot) (((rot) & 0x1) << 21)
+#define PPC_TBEGIN(rot) stringify_in_c(.long PPC_INST_TBEGIN | \
+		__PPC_TB_ROT(rot))
+
 #define LOOP_CNT 100
 MODULE_LICENSE("GPL");
 
@@ -39,7 +44,7 @@ int test_tbegin(void) {
 			"mflr %[tbegin_pc];"
 			"mtlr 6;"
 			"2: ;"
-			"tbegin.;"
+			PPC_TBEGIN(1) ";"
 			"beq 3f;"
 			"tend.;"
 			"li 0, 0;"
@@ -98,6 +103,11 @@ int test_tbegin(void) {
 
 	if (tfhar != tbegin_pc + 4) {
 		result = -8;
+		goto out;
+	}
+
+	if (!(texasr & TEXASR_ROT)) {
+		result = -9;
 		goto out;
 	}
 
