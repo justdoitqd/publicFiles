@@ -15,6 +15,26 @@
 #define SPRN_TFIAR      0x81    /* Transaction Failure Inst Addr    */
 #define SPRN_TFHAR      0x80    /* Transaction Failure Handler Addr */
 
+#if 0
+#define TEXASR_FC_LG    (63 - 7)        /* Failure Code */
+#define TEXASR_HV_LG    (63 - 34)       /* Hypervisor state*/
+#define TEXASR_PR_LG    (63 - 35)       /* Privilege level */
+#define TEXASR_FS_LG    (63 - 36)       /* failure summary */
+#define TEXASR_EX_LG    (63 - 37)       /* TFIAR exact bit */
+#ifdef __ASSEMBLY__
+#define TEXASR_FC       (0xFF << TEXASR_FC_LG)
+#else
+#define TEXASR_FC       (0x7FUL << TEXASR_FC_LG)
+#endif
+#define TEXASR_HV       __MASK(TEXASR_HV_LG)
+#define TEXASR_PR       __MASK(TEXASR_PR_LG)
+#define TEXASR_FS       __MASK(TEXASR_FS_LG)
+#define TEXASR_EX       __MASK(TEXASR_EX_LG)
+
+#define TM_CAUSE_PERSISTENT     0x01
+#define TM_CAUSE_EMULATE        0xd0
+#endif
+
 #define LOOP_CNT 100
 MODULE_LICENSE("GPL");
 
