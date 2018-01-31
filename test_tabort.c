@@ -61,7 +61,7 @@ int main()
 					   );
 
 	if (result)
-		printf("executed fail handler! texasr=%lx, tfiar=%lx, tfhar=%lx\n", texasr, tfiar, tfhar);
+		printf("executed fail handler! texasr=%lx(d30000018c000001 in HV KVM guest), tfiar=%lx, tfhar=%lx\n", texasr, tfiar, tfhar);
 
 	return 0;
 }
