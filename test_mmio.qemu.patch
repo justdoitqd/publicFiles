@@ -1,0 +1,107 @@
+diff --git a/hw/misc/ivshmem.c b/hw/misc/ivshmem.c
+index 4919011f38..7f362ceee4 100644
+--- a/hw/misc/ivshmem.c
++++ b/hw/misc/ivshmem.c
+@@ -44,7 +44,7 @@
+ 
+ #define IVSHMEM_REG_BAR_SIZE 0x100
+ 
+-#define IVSHMEM_DEBUG 0
++#define IVSHMEM_DEBUG 1
+ #define IVSHMEM_DPRINTF(fmt, ...)                       \
+     do {                                                \
+         if (IVSHMEM_DEBUG) {                            \
+@@ -170,6 +170,15 @@ static void ivshmem_update_irq(IVShmemState *s)
+     pci_set_irq(d, isr != 0);
+ }
+ 
++static void ivshmem_IntrStatus_write(IVShmemState *s, uint32_t val)
++{
++    IVSHMEM_DPRINTF("IntrStatus write(w) val = 0x%04x\n", val);
++
++    s->intrstatus = val;
++    ivshmem_update_irq(s);
++}
++
++#if 0
+ static void ivshmem_IntrMask_write(IVShmemState *s, uint32_t val)
+ {
+     IVSHMEM_DPRINTF("IntrMask write(w) val = 0x%04x\n", val);
+@@ -186,14 +195,6 @@ static uint32_t ivshmem_IntrMask_read(IVShmemState *s)
+     return ret;
+ }
+ 
+-static void ivshmem_IntrStatus_write(IVShmemState *s, uint32_t val)
+-{
+-    IVSHMEM_DPRINTF("IntrStatus write(w) val = 0x%04x\n", val);
+-
+-    s->intrstatus = val;
+-    ivshmem_update_irq(s);
+-}
+-
+ static uint32_t ivshmem_IntrStatus_read(IVShmemState *s)
+ {
+     uint32_t ret = s->intrstatus;
+@@ -274,14 +275,49 @@ static uint64_t ivshmem_io_read(void *opaque, hwaddr addr,
+ 
+     return ret;
+ }
++#endif
++
++static char ivshmem_bar0_buf_array[IVSHMEM_REG_BAR_SIZE];
++static char* ivshmem_bar0_buf = &ivshmem_bar0_buf_array[0];
++
++static void ivshmem_io_write_simon(void *opaque, hwaddr addr,
++                             uint64_t val, unsigned size)
++{
++    //IVShmemState *s = opaque;
++    IVSHMEM_DPRINTF("simon: writing to addr " TARGET_FMT_plx " with val" TARGET_FMT_plx " \n", addr, val);
++    if (size == 1)
++	    *(uint8_t*)(&ivshmem_bar0_buf[addr]) = val;
++    else if (size == 2)
++	    *(uint16_t*)(&ivshmem_bar0_buf[addr]) = val;
++    else if (size == 4)
++	    *(uint32_t*)(&ivshmem_bar0_buf[addr]) = val;
++    else 
++	    *(uint64_t*)(&ivshmem_bar0_buf[addr]) = val;
++}
++
++static uint64_t ivshmem_io_read_simon(void *opaque, hwaddr addr,
++                                unsigned size)
++{
++	uint64_t ret;
++	if (size == 1)
++		ret = *(uint8_t*)(&ivshmem_bar0_buf[addr]);
++	else if (size == 2)
++		ret = *(uint16_t*)(&ivshmem_bar0_buf[addr]);
++	else if (size == 4)
++		ret = *(uint32_t*)(&ivshmem_bar0_buf[addr]);
++	else
++		ret = *(uint64_t*)(&ivshmem_bar0_buf[addr]);
++	IVSHMEM_DPRINTF("simon: read from addr " TARGET_FMT_plx " got val" TARGET_FMT_plx " \n", addr, ret);
++	return ret;
++}
+ 
+ static const MemoryRegionOps ivshmem_mmio_ops = {
+-    .read = ivshmem_io_read,
+-    .write = ivshmem_io_write,
+-    .endianness = DEVICE_NATIVE_ENDIAN,
++    .read = ivshmem_io_read_simon,
++    .write = ivshmem_io_write_simon,
++    .endianness = DEVICE_LITTLE_ENDIAN,
+     .impl = {
+-        .min_access_size = 4,
+-        .max_access_size = 4,
++        .min_access_size = 1,
++        .max_access_size = 8,
+     },
+ };
+ 
+@@ -868,6 +904,7 @@ static void ivshmem_common_realize(PCIDevice *dev, Error **errp)
+ 
+         s->ivshmem_bar2 = host_memory_backend_get_memory(s->hostmem,
+                                                          &error_abort);
++	ivshmem_bar0_buf = memory_region_get_ram_ptr(s->ivshmem_bar2);
+     } else {
+         Chardev *chr = qemu_chr_fe_get_driver(&s->server_chr);
+         assert(chr);
