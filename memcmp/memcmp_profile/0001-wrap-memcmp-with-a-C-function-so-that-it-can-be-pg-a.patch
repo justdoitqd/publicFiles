@@ -1,0 +1,97 @@
+From 5e62719ed0fda0f4b21bbeca6ad9ef177a1bead3 Mon Sep 17 00:00:00 2001
+From: Simon Guo <wei.guo.simon@gmail.com>
+Date: Tue, 15 May 2018 20:44:51 +0800
+Subject: [PATCH] wrap memcmp() with a C function so that it can be -pg and
+ ftraced. Only update memcmp.c test case to make it invoke memcmp_() directly.
+
+Signed-off-by: Simon Guo <wei.guo.simon@gmail.com>
+---
+ arch/powerpc/lib/Makefile                            |  3 ++-
+ arch/powerpc/lib/memcmp_.c                           | 10 ++++++++++
+ arch/powerpc/lib/memcmp_64.S                         |  4 ++--
+ tools/testing/selftests/powerpc/stringloops/memcmp.c |  7 ++++---
+ 4 files changed, 18 insertions(+), 6 deletions(-)
+ create mode 100644 arch/powerpc/lib/memcmp_.c
+
+diff --git a/arch/powerpc/lib/Makefile b/arch/powerpc/lib/Makefile
+index 653901042ad7..2a101af929a4 100644
+--- a/arch/powerpc/lib/Makefile
++++ b/arch/powerpc/lib/Makefile
+@@ -26,7 +26,8 @@ obj-$(CONFIG_PPC_BOOK3S_64) += copyuser_power7.o copypage_power7.o \
+ 			       memcpy_power7.o
+ 
+ obj64-y	+= copypage_64.o copyuser_64.o mem_64.o hweight_64.o \
+-	   string_64.o memcpy_64.o memcmp_64.o pmem.o
++	   string_64.o memcpy_64.o memcmp_64.o pmem.o \
++	   memcmp_.o
+ 
+ obj64-$(CONFIG_SMP)	+= locks.o
+ obj64-$(CONFIG_ALTIVEC)	+= vmx-helper.o
+diff --git a/arch/powerpc/lib/memcmp_.c b/arch/powerpc/lib/memcmp_.c
+new file mode 100644
+index 000000000000..232b5b7e6141
+--- /dev/null
++++ b/arch/powerpc/lib/memcmp_.c
+@@ -0,0 +1,10 @@
++#include <linux/export.h>
++#include <linux/string.h>
++
++extern int memcmp_(const void *s1, const void *s2, __kernel_size_t n);
++int memcmp(const void *s1, const void *s2, __kernel_size_t n)
++{
++	return memcmp_(s1, s2, n);
++}
++
++EXPORT_SYMBOL(memcmp);
+diff --git a/arch/powerpc/lib/memcmp_64.S b/arch/powerpc/lib/memcmp_64.S
+index df2eec0d51c1..f93471a52e41 100644
+--- a/arch/powerpc/lib/memcmp_64.S
++++ b/arch/powerpc/lib/memcmp_64.S
+@@ -101,7 +101,7 @@
+  * 2) src/dst has different offset to the 8 bytes boundary. The handlers
+  * are named like .Ldiffoffset_xxxx
+  */
+-_GLOBAL(memcmp)
++_GLOBAL(memcmp_)
+ 	cmpdi	cr1,r5,0
+ 
+ 	/* Use the short loop if the src/dst addresses are not
+@@ -621,4 +621,4 @@ _GLOBAL(memcmp)
+ 	b	.Lcmp_lt32bytes
+ 
+ #endif
+-EXPORT_SYMBOL(memcmp)
++EXPORT_SYMBOL(memcmp_)
+diff --git a/tools/testing/selftests/powerpc/stringloops/memcmp.c b/tools/testing/selftests/powerpc/stringloops/memcmp.c
+index b5cf71727b2d..0e21cf39fe9e 100644
+--- a/tools/testing/selftests/powerpc/stringloops/memcmp.c
++++ b/tools/testing/selftests/powerpc/stringloops/memcmp.c
+@@ -26,7 +26,7 @@ void exit_vmx_ops(void)
+ {
+ 	vmx_count--;
+ }
+-int test_memcmp(const void *s1, const void *s2, size_t n);
++int test_memcmp_(const void *s1, const void *s2, size_t n);
+ 
+ /* test all offsets and lengths */
+ static void test_one(char *s1, char *s2, unsigned long max_offset,
+@@ -40,7 +40,7 @@ static void test_one(char *s1, char *s2, unsigned long max_offset,
+ 			unsigned long i;
+ 
+ 			y = memcmp(s1+offset, s2+offset, size);
+-			x = test_memcmp(s1+offset, s2+offset, size);
++			x = test_memcmp_(s1+offset, s2+offset, size);
+ 
+ 			if (((x ^ y) < 0) &&	/* Trick to compare sign */
+ 				((x | y) != 0)) { /* check for zero */
+@@ -154,5 +154,6 @@ static int testcases(void)
+ 
+ int main(void)
+ {
+-	return test_harness(testcases, "memcmp");
++	//return test_harness(testcases, "memcmp");
++	return testcases();
+ }
+-- 
+2.14.1
+

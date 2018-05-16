@@ -1,0 +1,77 @@
+From 67e94e085a8ccaf2faaeb6da70855f0c6bcd09ba Mon Sep 17 00:00:00 2001
+From: Simon Guo <wei.guo.simon@gmail.com>
+Date: Tue, 15 May 2018 03:15:16 -0400
+Subject: [PATCH] powerpc/64: add KSM optimization for memcmp()
+
+To optimize ppc64 memcmp() with VMX instruction, we need to think
+about the VMX penalty brought with.
+
+If kernel wants to use VMX instruction, it needs to save/restore current thread's VMX register. There are
+32 x 128 bits VMX registers, which means 32 x 16 = 512 bytes for load and store.
+
+The major concern regarding the memcmp() performance in kernel is KSM, who will use memcmp() to merge
+identify pages. So it will make sense to take some measures/enhancement on KSM.  Cyril Bur indicates
+that the memcmp() for KSM has a higher possibility to fail (unmatch) in previous bytes in following mail. And
+I am taking a follow-up on this with this patch.
+https://patchwork.ozlabs.org/patch/817322/#1773629
+
+I modified ksm memcmp API with following patch, so that the compared bytes number for each KSM memcmp() can
+be recorded and dumped.
+
+The test are performed at 2 host named "Ju" and "Jin:
+
+As can be seen:
+- 76% cases will fail/unmatch before 16 bytes;
+- 83% cases will fail/unmatch before 32 bytes;
+- 84% cases will fail/unmatch before 64 bytes;
+
+In this patch, 32 bytes will be compared firstly before jumping into VMX operations.
+
+Signed-off-by: Simon Guo <wei.guo.simon@gmail.com>
+---
+ arch/powerpc/lib/memcmp_64.S | 29 +++++++++++++++++++++++++++++
+ 1 file changed, 29 insertions(+)
+
+diff --git a/arch/powerpc/lib/memcmp_64.S b/arch/powerpc/lib/memcmp_64.S
+index 6303bbf60eef..df2eec0d51c1 100644
+--- a/arch/powerpc/lib/memcmp_64.S
++++ b/arch/powerpc/lib/memcmp_64.S
+@@ -405,6 +405,35 @@ _GLOBAL(memcmp)
+ 	/* Enter with src/dst addrs has the same offset with 8 bytes
+ 	 * align boundary
+ 	 */
++
++#ifdef CONFIG_KSM
++	/* KSM will always compare at page boundary so it falls into
++	 * .Lsameoffset_vmx_cmp.
++	 *
++	 * There is an optimization for KSM based on following fact:
++	 * KSM pages memcmp() prones to fail early at the first bytes. In
++	 * a statisis data, it shows 76% KSM memcmp() fails at the first
++	 * 16 bytes, and 83% KSM memcmp() fails at the first 32 bytes, 84%
++	 * KSM memcmp() fails at the first 64 bytes.
++	 *
++	 * Before applying VMX instructions which will lead to 32x128bits VMX
++	 * regs load/restore penalty, let us compares the first 32 bytes
++	 * so that we can catch the ~80% fail cases.
++	 */
++
++	li	r0,4
++	mtctr	r0
++.Lksm_32B_loop:
++	LD	rA,0,r3
++	LD	rB,0,r4
++	cmpld	cr0,rA,rB
++	addi	r3,r3,8
++	addi	r4,r4,8
++	bne     cr0,.LcmpAB_lightweight
++	addi	r5,r5,-8
++	bdnz	.Lksm_32B_loop
++#endif
++
+ 	ENTER_VMX_OPS
+ 	beq     cr1,.Llong_novmx_cmp
+ 
+-- 
+2.14.1
+
