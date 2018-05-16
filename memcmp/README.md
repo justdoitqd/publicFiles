@@ -1,4 +1,6 @@
-# Background
+# 32 bytes pre-checking on memcmp()
+
+## Background
 To optimize ppc64 memcmp() with VMX instruction, we need to think about the VMX penalty brought with:
 If kernel uses VMX instruction, it needs to save/restore current thread's VMX registers. There are 
 32 x 128 bits VMX registers in PPC, which means 32 x 16 = 512 bytes for load and store.
@@ -9,7 +11,7 @@ can be done here.  Cyril Bur indicates that the memcmp() for KSM has a higher po
 early in previous bytes in following mail. And I am taking a follow-up on this.
     https://patchwork.ozlabs.org/patch/817322/#1773629
 
-# Measure KSM early unmatch byte#
+## Measure KSM early unmatch byte#
 To measure the possibility of memcmp() early failure on KSM, I modified ksm memcmp API with following patch, 
 so that the compared bytes number for each KSM memcmp() can be recorded and dumped.
 https://github.com/justdoitqd/publicFiles/blob/master/memcmp/memcmp_cnt/0001-Add-memcmp-cnt-function-to-measure-KSM-cnt-bytes.patch
@@ -53,7 +55,7 @@ Further calculation shows:
 
 **As a result, I think it will be good for KSM to pre-check 32 bytes before going into VMX instructions.**
 
-# memcmp optimization and profiling
+## memcmp optimization and profiling
 Following patch inserts a previous 32 bytes checking before use VMX instructions:
 https://github.com/justdoitqd/publicFiles/blob/master/memcmp/memcmp_profile/0001-powerpc-64-add-KSM-optimization-for-memcmp.patch
 
