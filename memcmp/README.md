@@ -53,7 +53,7 @@ Further calculation shows:
 
 **As a result, I think it will be good for KSM to pre-check 32 bytes before going into VMX instructions.**
 
-# KSM memcmp optimization and profiling
+# memcmp optimization and profiling
 Following patch inserts a previous 32 bytes checking before use VMX instructions:
 https://github.com/justdoitqd/publicFiles/blob/master/memcmp/memcmp_profile/0001-powerpc-64-add-KSM-optimization-for-memcmp.patch
 
