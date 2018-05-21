@@ -88,7 +88,7 @@ void double_init(struct instruct_desc* instr_desc_p) {
 	int i;
 	for (i = 0; i < 16; i++)
 		instr_desc_p->vec_source.u[i] = 0;
-	*(double*)&instr_desc_p->vec_source = 3.14159;
+	*(double*)&instr_desc_p->vec_source = -3.14159;
 
 	VEC_PRINT("In double_init: ", instr_desc_p->vec_source);
 }
@@ -412,6 +412,8 @@ GEN_STORE_XFORM_16V(stvebx);
 GEN_STORE_XFORM_16V(stvehx);
 GEN_STORE_XFORM_16V(stvewx);
 
+//GEN_LOAD_XFORM_8F(lfiwax);
+
 /* even AT11.0 cannot compile those instructions currently :(  */
 //GEN_LOAD_XFORM_8R(lwzux);  /*update */
 //GEN_LOAD_XFORM_8R(lbzux);   /* update */
@@ -464,7 +466,7 @@ struct instruct_desc instrs[] = {
 	GEN_INSTR_ENTRY(lwbrx, stwbrx, 4, 4, NULL, 0, 0),
 	GEN_INSTR_ENTRY(lhbrx, sthbrx, 2, 2, NULL, 0, 0),
 	GEN_INSTR_ENTRY(lwax, dummy, 0, 8, NULL, 0, 0),
-	GEN_INSTR_ENTRY(lfiwax, dummy, 0, 8, NULL, 0, 0),
+	//GEN_INSTR_ENTRY(lfiwax, dummy, 0, 8, NULL, 0, 0),
 	GEN_INSTR_ENTRY(lfiwzx, dummy, 0, 8, NULL, 0, 0),
 	GEN_INSTR_ENTRY(dummy, stfiwx, 4, 0, NULL, 0, 0),
 	GEN_INSTR_ENTRY(lwz, dummy, 0, 8, NULL, 0, 0),
@@ -499,6 +501,8 @@ struct instruct_desc instrs[] = {
 	GEN_INSTR_ENTRY(dummy, stvehx, 2, 0, NULL, 0, 1),
 	GEN_INSTR_ENTRY(lvewx, dummy, 0, 4, NULL, 0, 1),
 	GEN_INSTR_ENTRY(dummy, stvewx, 4, 0, NULL, 0, 1),
+
+	GEN_INSTR_ENTRY(lfiwax, dummy, 0, 8, double_init, 0, 0),
 	//GEN_INSTR_ENTRY(lwzux, dummy, 0, 8, NULL, 0, 0),
 	//GEN_INSTR_ENTRY(lbzux, dummy, 0, 8, NULL, 0, 0),
 	//GEN_INSTR_ENTRY(ldux, stdux, 8, 8, NULL, 0, 0),
