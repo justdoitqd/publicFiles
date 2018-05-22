@@ -112,16 +112,15 @@ https://github.com/justdoitqd/publicFiles/tree/master/memcmp/memcmp_cnt/ju/noksm
 
 
 - For the memcmp() average execute time, it also improves:
-// with only https://patchwork.ozlabs.org/patch/914265/, which has no VMX optimization
-root@ubuntu1710:/sdb/publicFiles/memcmp/memcmp_profile/noksm# ../memcmp_dur_average.awk patch_32Bn_VMXn_noksm/trace
-average us = 0.0698329 us
-// with https://patchwork.ozlabs.org/patch/914265/  and https://patchwork.ozlabs.org/patch/914271/ , which has VMX optimization and 32B prechk optimization
+```
+// with https://patchwork.ozlabs.org/patch/914265/  and https://patchwork.ozlabs.org/patch/914271/ , which has VMX optimization and no 32B prechk optimization
 root@ubuntu1710:/sdb/publicFiles/memcmp/memcmp_profile/noksm# ../memcmp_dur_average.awk patch_32Bn_VMXy_noksm/trace
 average us = 0.0689134 us
+
 // with https://patchwork.ozlabs.org/patch/914265/  and https://patchwork.ozlabs.org/patch/914271/ and https://patchwork.ozlabs.org/patch/914273/ , which enables 32B prechk optimization
 root@ubuntu1710:/sdb/publicFiles/memcmp/memcmp_profile/noksm# ../memcmp_dur_average.awk patch_32By_VMXy_noksm/trace
 average us = 0.0552645 us
-
+```
 Data locates at: https://github.com/justdoitqd/publicFiles/tree/master/memcmp/memcmp_profile/noksm
 
 **As can be seen, with no specific call load, the average memcmp() time can also be improved ~+20% with the 32 bytes
