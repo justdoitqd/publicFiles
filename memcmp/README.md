@@ -101,6 +101,8 @@ pre-checking optmization.**
 ## 2. Common case:
 This section tests whether the change will improve common cases without KSM: 
 /sys/kernel/mm/ksm/run = 0
+
+
 I didn't launch any special call load other than VMs. 
 
 
