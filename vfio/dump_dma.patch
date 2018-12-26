@@ -1,0 +1,157 @@
+diff --git a/arch/x86/kernel/dumpstack.c b/arch/x86/kernel/dumpstack.c
+index e1bf65fca118..2657a876dae5 100644
+--- a/arch/x86/kernel/dumpstack.c
++++ b/arch/x86/kernel/dumpstack.c
+@@ -167,6 +167,7 @@ void show_stack(struct task_struct *task, unsigned long *sp)
+ 
+ 	show_stack_log_lvl(task, NULL, sp, "");
+ }
++EXPORT_SYMBOL(show_stack);
+ 
+ void show_stack_regs(struct pt_regs *regs)
+ {
+diff --git a/drivers/tty/sysrq.c b/drivers/tty/sysrq.c
+index 04d011ad9f8b..9d6a145fffbb 100644
+--- a/drivers/tty/sysrq.c
++++ b/drivers/tty/sysrq.c
+@@ -196,6 +196,20 @@ static struct sysrq_key_op sysrq_mountro_op = {
+ 	.enable_mask	= SYSRQ_ENABLE_REMOUNT,
+ };
+ 
++ATOMIC_NOTIFIER_HEAD(vfio_dma_notifier_list);
++EXPORT_SYMBOL(vfio_dma_notifier_list);
++
++static void sysrq_handle_vfio_dma_print(int key)
++{
++	atomic_notifier_call_chain(&vfio_dma_notifier_list, 0, NULL);
++}
++static struct sysrq_key_op sysrq_vfio_dma_op = {
++	.handler	= sysrq_handle_vfio_dma_print,
++	.help_msg	= "print vfio dma list",
++	.action_msg	= "start to print vfio dma list",
++	.enable_mask	= SYSRQ_ENABLE_DUMP,
++};
++
+ #ifdef CONFIG_LOCKDEP
+ static void sysrq_handle_showlocks(int key)
+ {
+@@ -479,7 +493,8 @@ static struct sysrq_key_op *sysrq_key_table[36] = {
+ 	&sysrq_showstate_op,		/* t */
+ 	&sysrq_mountro_op,		/* u */
+ 	/* v: May be registered for frame buffer console restore */
+-	NULL,				/* v */
++	/* for debug */
++	&sysrq_vfio_dma_op,		/* v */
+ 	&sysrq_showstate_blocked_op,	/* w */
+ 	/* x: May be registered on mips for TLB dump */
+ 	/* x: May be registered on ppc/powerpc for xmon */
+diff --git a/drivers/vfio/vfio.c b/drivers/vfio/vfio.c
+index b3cc9a0b0e6f..36ab7b298043 100644
+--- a/drivers/vfio/vfio.c
++++ b/drivers/vfio/vfio.c
+@@ -1752,6 +1752,27 @@ long vfio_external_check_extension(struct vfio_group *group, unsigned long arg)
+ }
+ EXPORT_SYMBOL_GPL(vfio_external_check_extension);
+ 
++struct vfio_iommu* vfio_dma_dump_get_iommu(void)
++{
++	struct vfio_group *group;
++	struct vfio_iommu *iommu = NULL;
++
++	mutex_lock(&vfio.group_lock);
++	list_for_each_entry(group, &vfio.group_list, vfio_next) {
++		if (!group->container) {
++			printk(KERN_EMERG "vfio_dma_dump_get_iommu: group:%p container is NULL", group);
++			break;
++		}
++
++		iommu = group->container->iommu_data;
++		break;
++	}
++	mutex_unlock(&vfio.group_lock);
++
++	return iommu;
++}
++EXPORT_SYMBOL_GPL(vfio_dma_dump_get_iommu);
++
+ /**
+  * Sub-module support
+  */
+diff --git a/drivers/vfio/vfio_iommu_type1.c b/drivers/vfio/vfio_iommu_type1.c
+index 93488f202e34..e6b486b8551c 100644
+--- a/drivers/vfio/vfio_iommu_type1.c
++++ b/drivers/vfio/vfio_iommu_type1.c
+@@ -1852,10 +1852,49 @@ static const struct vfio_iommu_driver_ops vfio_iommu_driver_ops_type1 = {
+ 	.unregister_notifier	= vfio_iommu_type1_unregister_notifier,
+ };
+ 
++static int vfio_dma_dump_list(struct notifier_block *this, unsigned long ev, void *ptr)
++{
++	struct vfio_iommu *iommu;
++	struct vfio_dma *dma, *dma_next;
++
++	iommu = vfio_dma_dump_get_iommu();
++	printk(KERN_EMERG "iommu:%p\n", iommu);
++	if (iommu) {
++		int i = 0;
++		char buf[512];
++		char *p = buf;
++
++		buf[0] = 0;
++		rbtree_postorder_for_each_entry_safe(dma, dma_next, &iommu->dma_list, node) {
++			p += snprintf(p, sizeof(buf) - (p - buf), "[%d]{i:0x%lx~0x%lx,v:0x%lx~%lx,l:%lx} ",
++					i, dma->iova, dma->iova + dma->size,
++					dma->vaddr, dma->vaddr + dma->size,
++					dma->size);
++
++			if ((i++ % 4) == 0) {
++				printk(KERN_EMERG "%s\n", buf);
++				p = buf;
++				buf[0] = 0;
++			}
++		}
++
++		if (p != buf)
++			printk(KERN_EMERG "%s\n", buf);
++	}
++
++	return NOTIFY_DONE;
++}
++
++static struct notifier_block vfio_dma_dump_block = {
++	.notifier_call = vfio_dma_dump_list,
++};
++
+ static int __init vfio_iommu_type1_init(void)
+ {
+ 	if (vfio_init_sysctl())
+ 		pr_err("vfio: sysctl register failed\n");
++	atomic_notifier_chain_register(&vfio_dma_notifier_list,
++			&vfio_dma_dump_block);
+ 	return vfio_register_iommu_driver(&vfio_iommu_driver_ops_type1);
+ }
+ 
+diff --git a/include/linux/kernel.h b/include/linux/kernel.h
+index 61054f12be7c..d010c17f30d1 100644
+--- a/include/linux/kernel.h
++++ b/include/linux/kernel.h
+@@ -452,6 +452,7 @@ extern int sysctl_panic_on_rcu_stall;
+ extern int sysctl_panic_on_stackoverflow;
+ 
+ extern bool crash_kexec_post_notifiers;
++extern struct atomic_notifier_head vfio_dma_notifier_list;
+ 
+ /*
+  * panic_cpu is used for synchronizing panic() and crash_kexec() execution. It
+diff --git a/include/linux/vfio.h b/include/linux/vfio.h
+index edf9b2cad277..9f0018bdca9b 100644
+--- a/include/linux/vfio.h
++++ b/include/linux/vfio.h
+@@ -141,6 +141,7 @@ struct vfio_info_cap {
+ extern struct vfio_info_cap_header *vfio_info_cap_add(
+ 		struct vfio_info_cap *caps, size_t size, u16 id, u16 version);
+ extern void vfio_info_cap_shift(struct vfio_info_cap *caps, size_t offset);
++extern struct vfio_iommu* vfio_dma_dump_get_iommu(void);
+ 
+ extern int vfio_info_add_capability(struct vfio_info_cap *caps,
+ 				    int cap_type_id, void *cap_type);
